@@ -3,4 +3,11 @@
 *.swp
 /dist/
 /docs/_build/
-
+/bin/
+/include/
+/lib
+/sphinx-to-github/
+/.installed.cfg
+/develop-eggs/
+/eggs/
+            

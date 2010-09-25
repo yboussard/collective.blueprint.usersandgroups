@@ -22,13 +22,13 @@ class CreateUser(object):
     def __iter__(self):
         for item in self.previous:
 
-            if '_password' not in item.keys() or \
-               '_username' not in item.keys():
+            if '_user_password' not in item.keys() or \
+               '_user_name' not in item.keys():
                 yield item; continue
 
-            if self.regtool.isMemberIdAllowed(item['_username']):
-                self.regtool.addMember(item['_username'],
-                                item['_password'].encode('utf-8'))
+            if self.regtool.isMemberIdAllowed(item['_user_name']):
+                self.regtool.addMember(item['_user_name'],
+                                item['_user_password'].encode('utf-8'))
             yield item
 
 
@@ -48,8 +48,8 @@ class CreateGroup(object):
 
     def __iter__(self):
         for item in self.previous:
-            if item.get('_groupname', False):
-                self.gtool.addGroup(item['_groupname'])
+            if item.get('_group_name', False):
+                self.gtool.addGroup(item['_group_name'])
             yield item
 
 
@@ -72,36 +72,39 @@ class UpdateUserProperties(object):
     def __iter__(self):
         for item in self.previous:
 
-            if '_username' in item.keys():
-                member = self.memtool.getMemberById(item['_username'])
+            if '_user_name' in item.keys():
+                member = self.memtool.getMemberById(item['_user_name'])
                 if not member:
                     yield item; continue
-                member.setMemberProperties(item['_properties'])
+                member.setMemberProperties(item['_user_properties'])
 
                 # add member to group
                 if item.get('_user_groups', False):
                     for groupid in item['_user_groups']:
                         group = self.gtool.getGroupById(groupid)
                         if group:
-                            group.addMember(item['_username'])
+                            group.addMember(item['_user_name'])
 
                 # setting global roles
-                if item.get('_root_roles', False):
+                if item.get('_user_global_roles', False):
                     self.portal.acl_users.userFolderEditUser(
-                                item['_username'],
+                                item['_user_name'],
                                 None,
-                                item['_root_roles'])
+                                item['_user_global_roles'])
 
                 # setting local roles
-                if item.get('_local_roles', False):
-                    try:
-                        obj = self.portal.unrestrictedTraverse(item['_plone_site'])
-                    except (AttributeError, KeyError):
-                        pass
-                    else:
-                        if IRoleManager.providedBy(obj):
-                            obj.manage_addLocalRoles(item['_username'], item['_local_roles'])
-                            obj.reindexObjectSecurity()
+                if item.get('_user_local_roles', False):
+                    for path, role in item['_user_local_roles']:
+                        try:
+                            item_obj = self.portal.unrestrictedTraverse(path)
+                        except (AttributeError, KeyError):
+                            pass
+                        else:
+                            if IRoleManager.providedBy(item_obj):
+                                item_obj.manage_addLocalRoles(
+                                        item['_user_name'],
+                                        item['_user_local_roles'])
+                                item_obj.reindexObjectSecurity()
 
             yield item
 
@@ -123,34 +126,40 @@ class UpdateGroupProperties(object):
 
     def __iter__(self):
         for item in self.previous:
-            if not item.get('_groupname', False):
+            if not item.get('_group_name', False):
                 yield item; continue
 
-            group = self.gtool.getGroupById(item['_groupname'])
+            group = self.gtool.getGroupById(item['_group_name'])
             if not group:
                 yield item; continue
 
-            if item.get('_root_group', False):
-                self.gtool.editGroup(item['_groupname'],
-                                    roles=item['_roles'])
-            elif item.get('_roles', False):
+            # setting group properties
+            if item.get('_group_properties', False):
+                group.setGroupProperties(item['_group_properties'])
 
-                # setting local roles
-                try:
-                    obj = self.portal.unrestrictedTraverse(item['_plone_site'])
-                except (AttributeError, KeyError):
-                    pass
-                else:
-                    if IRoleManager.providedBy(obj):
-                        obj.manage_addLocalRoles(item['_groupname'], item['_roles'])
-                        obj.reindexObjectSecurity()
-
+            # setting groups of group
             if item.get('_group_groups', False):
-                try:
-                    self.gtool.editGroup(item['_groupname'],
-                                    groups=item.get('_group_groups', []))
-                except:
-                    pass
+                self.gtool.editGroup(item['_group_name'],
+                                     groups=item.get('_group_groups', []))
 
-            group.setGroupProperties(item['_properties'])
+            # setting global roles
+            if item.get('_group_global_roles', False):
+                self.gtool.editGroup(
+                        item['_group_name'],
+                        roles=item['_group_roles'])
+
+            # setting local roles
+            elif item.get('_group_roles', False):
+                for path, role in item['_user_local_roles']:
+                    try:
+                        item_obj = self.portal.unrestrictedTraverse(path)
+                    except (AttributeError, KeyError):
+                        pass
+                    else:
+                        if IRoleManager.providedBy(item_obj):
+                            item_obj.manage_addLocalRoles(
+                                    item['_group_name'],
+                                    item['_user_local_roles'])
+                            item_obj.reindexObjectSecurity()
+
             yield item
