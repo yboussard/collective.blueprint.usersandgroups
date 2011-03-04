@@ -1,17 +1,33 @@
-
 import os
 import simplejson
+from datetime import datetime
+
+from App.config import getConfiguration
+
 
 COUNTER = 1
-UTEMP = '/opt/plone/unex_exported_users'
-GTEMP = '/opt/plone/unex_exported_groups'
+
+UTEMP = os.path.join(getConfiguration().instancehome, 'var',
+                     'exportuser-%s' % datetime.today()\
+                     .strftime('%Y-%m-%d-%H-%M-%S'))
+
+GTEMP = os.path.join(getConfiguration().instancehome, 'var',
+                     'exportgroup-%s' % datetime.today()\
+                     .strftime('%Y-%m-%d-%H-%M-%S'))
+
+for path in (UTEMP, GTEMP):
+    if not os.path.isdir(path):
+        os.makedirs(path)
+
+
 GROUPS = {}
 GROUP_NAMES = {}
 USERS = {}
 
 def export(self):
     get_users_and_groups([self], 1)
-    get_users_and_groups(walk_all(self), 0)
+    # it's stupid to do that
+    #get_users_and_groups(walk_all(self), 0)
     store_users_and_groups()
     return 'OK'
 
@@ -28,6 +44,7 @@ def get_users_and_groups(items, root):
     global GROUPS
     global GROUP_NAMES
     global USERS
+
     for item in items:
         if item.__class__.__name__ == 'PloneSite' and \
                         not item.getId().startswith('copy_of'):
@@ -54,8 +71,9 @@ def get_users_and_groups(items, root):
                     local_roles = item.__ac_local_roles__
                     if local_roles.get(group_name, False):
                         roles += tuple(local_roles[group_name])
-                    ignoredset = set(['Authenticated', 'Member'])
-                    roles = list(set(roles).difference(ignoredset))
+                    ## set type is not available for python2.3
+                    ignoredset = ('Authenticated', 'Member')
+                    roles = [x for x in roles if x not in ignoredset]
                     group_data['_roles'] = roles
                     group_data['_plone_site'] = '/'.join(item.getPhysicalPath())
                     group_data['_properties'] = {}
@@ -98,8 +116,10 @@ def get_users_and_groups(items, root):
                     local_roles = item.__ac_local_roles__
                     if local_roles.get(user_name, False):
                         roles += tuple(local_roles[user_name])
-                    ignoredset = set(['Authenticated', 'Member'])
-                    roles = list(set(roles).difference(ignoredset))
+                    ignoredset = ('Authenticated', 'Member')
+                    roles = [x for x in roles if x not in ignoredset]
+                    #ignoredset = set(['Authenticated', 'Member'])
+                    #roles = list(set(roles).difference(ignoredset))
                     user_data['_local_roles'] = roles
                 user_data['_user_groups'] = []
                 user_data['_plone_site'] = '/'.join(item.getPhysicalPath())
@@ -126,14 +146,19 @@ def store_users_and_groups():
     global USERS
     global COUNTER
     for group_name, group_data in GROUPS.items():
+        
         group = fix_group_names((group_data['_groupname'],), group_data)[0]
         group_data['_groupname'] = group
-        groups = fix_group_names(group_data['_group_groups'], group_data)
+        ### _group_groups is prefixed by group_ 
+        groups = fix_group_names( group_data['_group_groups'] ,
+                                  group_data)
         group_data['_group_groups'] = groups
         write(group_data, GTEMP)
         print '   |--> '+str(COUNTER)+' - '+str(group_data['_groupname'])+' IN: '+group_data['_plone_site']
         COUNTER += 1
+    COUNTER = 0
     for user_name, user_data in USERS.items():
+        
         groups = fix_group_names(user_data['_user_groups'], user_data)
         user_data['_user_groups'] = groups
         write(user_data, UTEMP)
@@ -145,10 +170,18 @@ def fix_group_names(groupnames, data):
     groups = []
     for group in groupnames:
         rgroup = group.replace(' ', '_').replace('-', '_')
-        if GROUP_NAMES[group]:
-            groups.append(rgroup+'_'+data['_plone_site'].strip('/').split('/')[-1])
-        else:
-            groups.append(rgroup)
+        try:
+            ### in case of _group_groups or of _user_groups
+            if group.startswith('group_'):
+                group = group[len('group_'):]
+            if GROUP_NAMES[group]:
+                groups.append(rgroup+'_'+data['_plone_site'].strip('/').split('/')[-1])
+            else:
+                groups.append(rgroup)
+        except:
+            import pdb;pdb.set_trace();
+            pass
+            
     return groups
 
 
