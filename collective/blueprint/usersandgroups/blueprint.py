@@ -3,7 +3,8 @@ from collective.transmogrifier.interfaces import ISection, ISectionBlueprint
 from Products.CMFCore.utils import getToolByName
 from zope.app.component.hooks import getSite
 from AccessControl.interfaces import IRoleManager
-
+from plone.i18n.normalizer import idnormalizer
+from Products.PlonePAS.interfaces.group import IGroupManagement
 
 class CreateUser(object):
     """ """
@@ -49,6 +50,10 @@ class CreateGroup(object):
     def __iter__(self):
         for item in self.previous:
             if item.get('_groupname', False):
+                if '_properties' in item and \
+                       not item['_properties'].get('title'):
+                    item['_properties']['title'] = item['_groupname']
+                item['_groupname'] = idnormalizer.normalize(item['_groupname'])
                 self.gtool.addGroup(item['_groupname'])
             yield item
 
@@ -67,6 +72,8 @@ class UpdateUserProperties(object):
         self.context = transmogrifier.context
         self.memtool = getToolByName(self.context, 'portal_membership')
         self.gtool = getToolByName(self.context, 'portal_groups')
+        self.group_plugins = self.gtool._getPlugins()\
+                             .listPlugins(IGroupManagement)
         self.portal = getSite()
 
     def __iter__(self):
@@ -80,10 +87,25 @@ class UpdateUserProperties(object):
 
                 # add member to group
                 if item.get('_user_groups', False):
+                    
                     for groupid in item['_user_groups']:
+                        if groupid.startswith(u'group_'):
+                            ## because group is prefixed by group
+                            groupid = groupid[len(u'group_'):]
+                        groupid = idnormalizer.normalize(groupid)
                         group = self.gtool.getGroupById(groupid)
+                        ## because of postonly
                         if group:
-                            group.addMember(item['_username'])
+                            for mid,  manager in self.group_plugins:
+                                try:
+                                    if manager\
+                                       .addPrincipalToGroup(item['_username'],
+                                                            group.getId()):
+                                        
+                                        break
+                                except:
+                                    pass
+                            
 
                 # setting global roles
                 if item.get('_root_roles', False):
@@ -125,7 +147,6 @@ class UpdateGroupProperties(object):
         for item in self.previous:
             if not item.get('_groupname', False):
                 yield item; continue
-
             group = self.gtool.getGroupById(item['_groupname'])
             if not group:
                 yield item; continue
@@ -144,7 +165,6 @@ class UpdateGroupProperties(object):
                     if IRoleManager.providedBy(obj):
                         obj.manage_addLocalRoles(item['_groupname'], item['_roles'])
                         obj.reindexObjectSecurity()
-
             if item.get('_group_groups', False):
                 try:
                     self.gtool.editGroup(item['_groupname'],
@@ -162,4 +182,5 @@ class UpdateGroupProperties(object):
             if '_properties' in item:
                 self.gtool.editGroup(item['_groupname'],
                                      **item['_properties'])
+                
             yield item
