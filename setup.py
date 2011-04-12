@@ -1,7 +1,7 @@
 from setuptools import setup, find_packages
 import os
 
-version = '0.1.1'
+version = '0.2.0'
 
 setup(name='collective.blueprint.usersandgroups',
       version=version,
@@ -13,8 +13,8 @@ setup(name='collective.blueprint.usersandgroups',
         "Programming Language :: Python",
         ],
       keywords='plone transmogrifier blueprint user group',
-      author='',
-      author_email='',
+      author='garbas + yboussard',
+      author_email='yboussard@alterway.fr',
       url='http://svn.plone.org/svn/collective/',
       license='GPL',
       packages=find_packages(exclude=['ez_setup']),
