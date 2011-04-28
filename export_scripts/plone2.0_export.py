@@ -14,8 +14,12 @@ UTEMP = os.path.join(getConfiguration().instancehome, 'var',
 GTEMP = os.path.join(getConfiguration().instancehome, 'var',
                      'exportgroup-%s' % datetime.today()\
                      .strftime('%Y-%m-%d-%H-%M-%S'))
+LTEMP = os.path.join(getConfiguration().instancehome, 'var',
+                     'exportldap-%s' % datetime.today()\
+                     .strftime('%Y-%m-%d-%H-%M-%S'))
 
-for path in (UTEMP, GTEMP):
+
+for path in (UTEMP, GTEMP, LTEMP):
     if not os.path.isdir(path):
         os.makedirs(path)
 
@@ -29,6 +33,7 @@ def export(self):
     # it's stupid to do that
     #get_users_and_groups(walk_all(self), 0)
     store_users_and_groups()
+    get_ldapuser_folder(self)
     return 'OK'
 
 def walk_all(folder):
@@ -39,6 +44,66 @@ def walk_all(folder):
            item.objectIds():
             for subitem in walk_all(item):
                 yield subitem
+
+
+
+def get_ldapuser_folder(context):
+    global COUNTER
+    acl_users = context.acl_users
+    
+    charset = context.portal_properties.site_properties.default_charset
+    for x in acl_users.objectValues(['GRUFUsers',]):
+        if 'acl_users' in x.objectIds() \
+               and x['acl_users'].meta_type == 'LDAPUserFolder':
+            ## we have an candidates
+            obj = x['acl_users']
+            json = {}
+            json['_config'] = {}
+            json['_type'] = 'LdapUserFolder'
+            ## first import configuration
+            for x in ('_rdnattr',
+                      '_roles',
+                       'groups_scope',
+                       '_binduid_usage',
+                       'groups_base',
+                       '_binduid',
+                       '_bindpwd',
+                       '_authenticated_timeout',
+                       'users_base',
+                       'read_only',
+                       '_uid_attr',
+                       'title',
+                       '_pwd_encryption',
+                       '_local_groups',
+                       '_user_objclasses',
+                       '_login_attr',
+                       '_additional_groups',
+                       'users_scope',
+                      '_ldapschema'):
+                json['_config'][x] = getattr(obj,x)
+            ## configuration of server
+            json['_config']['_servers'] = obj._delegate._servers
+            json['_data'] = {}
+            
+            for x,y in obj._groups_store.iteritems():
+                ##  ('CN=toto,OU=Pollux Prod', ['Member', 'group_Groupe_BioCom'])]
+                key = x.decode(charset,'ignore')
+                                
+                
+                json['_data'][key] = {'roles':[], 'groups':[]}
+                for rorg in y:
+                    rorg = rorg.decode(charset,'ignore')
+                    if rorg.startswith(u'group_'):
+                        ## its a group
+                        json['_data'][key]['groups'].append(rorg)
+                    else:
+                        if rorg not in json['_data'][key]['roles']:
+                            json['_data'][key]['roles'].append(rorg)
+            
+            write(json, LTEMP)
+            COUNTER +=1
+            
+            
 
 def get_users_and_groups(items, root):
     global GROUPS

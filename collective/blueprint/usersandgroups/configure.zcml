@@ -22,4 +22,10 @@
     name="collective.blueprint.usersandgroups.updategroupproperty"
     />
 
+  <utility
+    component=".blueprint.UpdateLdapGroups"
+    name="collective.blueprint.usersandgroups.updateldapgroups"
+    />
+
+
 </configure>

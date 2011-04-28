@@ -75,6 +75,7 @@ class UpdateUserProperties(object):
         self.group_plugins = self.gtool._getPlugins()\
                              .listPlugins(IGroupManagement)
         self.portal = getSite()
+        
 
     def __iter__(self):
         for item in self.previous:
@@ -184,3 +185,53 @@ class UpdateGroupProperties(object):
                                      **item['_properties'])
                 
             yield item
+
+
+class UpdateLdapGroups(object):
+    """ """
+
+    implements(ISection)
+    classProvides(ISectionBlueprint)
+
+    def __init__(self, transmogrifier, name, options, previous):
+        self.transmogrifier = transmogrifier
+        self.name = name
+        self.options = options
+        self.previous = previous
+        self.context = transmogrifier.context
+        self.acl_users = getToolByName(self.context, 'acl_users')
+        self.gtool = getToolByName(self.context, 'portal_groups')
+        self.portal = getSite()
+        self.group_plugins = self.gtool._getPlugins()\
+                             .listPlugins(IGroupManagement)
+
+    def __iter__(self):
+        for item in self.previous:
+            if not item.get('_data', False):
+                yield item; continue
+            if item.get('_type', None) != 'LdapUserFolder':
+                yield item; continue
+            for key in item['_data']:
+
+                
+                cn=key.split(',')[0][len('CN='):]
+                users = self.acl_users.searchUsers(fullname=cn)
+                for user in users:
+                    
+                    if user.get('dn','') == key or cn=='lecteur':
+                        import pdb;pdb.set_trace();
+                        self.acl_users.userFolderEditUser(
+                            user['id'], None, item['_data'][key]['roles']
+                            )
+                        for groupid in item['_data'][key]['groups']:
+                            if groupid.startswith(u'group_'):
+                                groupid = groupid[len(u'group_'):]
+                            groupid = idnormalizer.normalize(groupid)  
+                            for mid,  manager in self.group_plugins:
+                                try:
+                                    if manager\
+                                       .addPrincipalToGroup(user['id'],
+                                                            groupid):
+                                        break
+                                except:
+                                    pass
