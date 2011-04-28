@@ -1,3 +1,4 @@
+import locale
 from zope.interface import implements, classProvides
 from collective.transmogrifier.interfaces import ISection, ISectionBlueprint
 from Products.CMFCore.utils import getToolByName
@@ -5,6 +6,11 @@ from zope.app.component.hooks import getSite
 from AccessControl.interfaces import IRoleManager
 from plone.i18n.normalizer import idnormalizer
 from Products.PlonePAS.interfaces.group import IGroupManagement
+
+try:
+    ENCODING = locale.getdefaultlocale()[1]
+except:
+    ENCODING = 'utf-8'
 
 class CreateUser(object):
     """ """
@@ -218,8 +224,8 @@ class UpdateLdapGroups(object):
                 users = self.acl_users.searchUsers(fullname=cn)
                 for user in users:
                     
-                    if user.get('dn','') == key or cn=='lecteur':
-                        import pdb;pdb.set_trace();
+                    if user.get('dn','').decode(ENCODING) == key:
+                        
                         self.acl_users.userFolderEditUser(
                             user['id'], None, item['_data'][key]['roles']
                             )
