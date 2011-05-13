@@ -96,9 +96,7 @@ class UpdateUserProperties(object):
                 if item.get('_user_groups', False):
                     
                     for groupid in item['_user_groups']:
-                        if groupid.startswith(u'group_'):
-                            ## because group is prefixed by group
-                            groupid = groupid[len(u'group_'):]
+                        
                         groupid = idnormalizer.normalize(groupid)
                         group = self.gtool.getGroupById(groupid)
                         ## because of postonly
@@ -230,9 +228,7 @@ class UpdateLdapGroups(object):
                             user['id'], None, item['_data'][key]['roles']
                             )
                         for groupid in item['_data'][key]['groups']:
-                            if groupid.startswith(u'group_'):
-                                groupid = groupid[len(u'group_'):]
-                            groupid = idnormalizer.normalize(groupid)  
+                            groupid = idnormalizer.normalize(groupid)
                             for mid,  manager in self.group_plugins:
                                 try:
                                     if manager\
